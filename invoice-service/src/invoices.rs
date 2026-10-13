@@ -251,7 +251,7 @@ async fn create_invoice(
     }
 
     let invoice = load_invoice(&mut tx, invoice_id, business.id).await?;
-    let payload = serde_json::to_value(&invoice).expect("invoice serializes");
+    let payload = serde_json::json!({ "invoice": invoice });
     events::enqueue(&mut tx, business.id, events::INVOICE_CREATED, payload).await?;
     tx.commit().await?;
 
@@ -342,9 +342,10 @@ async fn transition(
     let current = lock_invoice(&mut tx, id, business.id).await?;
 
     if !current.state.can_transition_to(to) {
+        let terminal = if current.state.is_terminal() { " (a terminal state)" } else { "" };
         return Err(ApiError::conflict(
             "invalid_state_transition",
-            format!("cannot move invoice from {} to {}", current.state.as_str(), to.as_str()),
+            format!("cannot move invoice from {}{terminal} to {}", current.state.as_str(), to.as_str()),
         ));
     }
 

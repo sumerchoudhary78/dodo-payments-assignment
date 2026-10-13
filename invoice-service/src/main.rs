@@ -12,11 +12,13 @@ mod domain;
 mod error;
 mod extract;
 mod invoices;
+mod payments;
 mod webhooks;
+mod workers;
 
 use sqlx::postgres::PgPoolOptions;
 
-use crate::{app::AppState, config::Config};
+use crate::{app::AppState, config::Config, payments::psp_client::PspClient};
 
 #[tokio::main]
 async fn main() {
@@ -60,8 +62,13 @@ async fn serve(db: sqlx::PgPool, config: Config) {
         auth::seed_demo_business(&db, key).await.expect("seed demo business");
     }
 
-    let listener = tokio::net::TcpListener::bind(&config.bind_addr).await.expect("bind");
-    tracing::info!(addr = %config.bind_addr, "invoice service listening");
-    let state = AppState { db, config };
+    let psp = PspClient::new(config.psp_url.clone(), config.psp_timeout);
+    let state = AppState { db, config, psp };
+
+    // Background workers run in the same process, independent of any request.
+    tokio::spawn(workers::reconciler::run(state.clone()));
+
+    let listener = tokio::net::TcpListener::bind(&state.config.bind_addr).await.expect("bind");
+    tracing::info!(addr = %state.config.bind_addr, "invoice service listening");
     axum::serve(listener, app::router(state)).await.expect("server");
 }
