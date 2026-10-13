@@ -268,11 +268,13 @@ async fn get_invoice(
     Ok(Json(load_invoice(&mut conn, id, business.id).await?))
 }
 
+// Pagination fields are listed here rather than `#[serde(flatten)]`-ing `Page`: with flatten,
+// serde_urlencoded hands numbers over as strings and `limit=1` fails to parse.
 #[derive(Deserialize)]
 struct ListQuery {
     state: Option<String>,
-    #[serde(flatten)]
-    page: Page,
+    limit: Option<i64>,
+    starting_after: Option<Uuid>,
 }
 
 async fn list_invoices(
@@ -286,7 +288,8 @@ async fn list_invoices(
             ApiError::validation("state must be one of: draft, open, paid, void, uncollectible")
         })?),
     };
-    let limit = query.page.limit();
+    let page = Page { limit: query.limit, starting_after: query.starting_after };
+    let limit = page.limit();
 
     let mut conn = state.db.acquire().await?;
     let rows = sqlx::query_as::<_, InvoiceRow>(
@@ -299,7 +302,7 @@ async fn list_invoices(
     )
     .bind(business.id)
     .bind(filter.map(InvoiceState::as_str))
-    .bind(query.page.starting_after)
+    .bind(page.starting_after)
     .bind(limit + 1)
     .fetch_all(&mut *conn)
     .await?;
