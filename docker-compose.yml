@@ -1,0 +1,63 @@
+# `docker compose up` starts everything; no manual steps.
+# Demo credentials below are for local use only.
+
+x-app: &app
+  build: .
+  image: dodo-invoice-service:local
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: invoices
+    ports:
+      - "5433:5432"   # host port 5433 so it doesn't clash with a local Postgres; tests use it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d invoices"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mock-psp:
+    <<: *app
+    command: ["mock-psp"]
+    environment:
+      BIND_ADDR: 0.0.0.0:8081
+      PSP_NORMAL_DELAY_MS: "100"
+      PSP_TIMEOUT_DELAY_MS: "30000"
+    ports:
+      - "8081:8081"
+
+  webhook-receiver:
+    <<: *app
+    command: ["webhook-receiver"]
+    environment:
+      BIND_ADDR: 0.0.0.0:9000
+      WEBHOOK_SECRET: whsec_demo_local_only
+
+  api:
+    <<: *app
+    command: ["invoice-service"]
+    depends_on:
+      db:
+        condition: service_healthy
+      mock-psp:
+        condition: service_started
+      webhook-receiver:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/invoices
+      BIND_ADDR: 0.0.0.0:8080
+      PSP_URL: http://mock-psp:8081
+      PSP_TIMEOUT_MS: "5000"
+      RECONCILE_INTERVAL_MS: "10000"
+      RECONCILE_AFTER_MS: "30000"
+      SEED_API_KEY: sk_demo_local_only
+      SEED_WEBHOOK_URL: http://webhook-receiver:9000/webhooks
+      SEED_WEBHOOK_SECRET: whsec_demo_local_only
+      RUST_LOG: info,sqlx=warn
+    ports:
+      - "8080:8080"
