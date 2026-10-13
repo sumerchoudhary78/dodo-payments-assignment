@@ -1,0 +1,4 @@
+/target
+.env
+*.docx
+.DS_Store
