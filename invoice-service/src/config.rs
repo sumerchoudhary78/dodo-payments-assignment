@@ -15,6 +15,10 @@ pub struct Config {
     pub reconcile_after: Duration,
     /// If set, a demo business with this API key is created at startup (D5: zero-step demo).
     pub seed_api_key: Option<String>,
+    /// If set together with the seed key, the demo business also gets this webhook endpoint
+    /// with this known secret, so the demo receiver can verify signatures with no manual setup.
+    pub seed_webhook_url: Option<String>,
+    pub seed_webhook_secret: Option<String>,
 }
 
 impl Config {
@@ -27,6 +31,8 @@ impl Config {
             reconcile_interval: ms("RECONCILE_INTERVAL_MS", 10_000),
             reconcile_after: ms("RECONCILE_AFTER_MS", 30_000),
             seed_api_key: optional("SEED_API_KEY"),
+            seed_webhook_url: optional("SEED_WEBHOOK_URL"),
+            seed_webhook_secret: optional("SEED_WEBHOOK_SECRET"),
         };
         // Safety invariant: the reconciler must never look up an attempt whose /pay request
         // could still be in flight. A PSP "not found" for an in-flight charge would be marked

@@ -2,7 +2,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
 
@@ -22,6 +25,20 @@ pub struct AppState {
     pub charges: Arc<Mutex<HashMap<String, Charge>>>,
     pub normal_delay: Duration,
     pub timeout_delay: Duration,
+    /// Number of POST /charges requests received, including duplicates. Lets tests assert
+    /// "no second PSP call".
+    pub charge_requests: Arc<AtomicUsize>,
+}
+
+impl AppState {
+    pub fn new(normal_delay: Duration, timeout_delay: Duration) -> Self {
+        AppState {
+            charges: Arc::new(Mutex::new(HashMap::new())),
+            normal_delay,
+            timeout_delay,
+            charge_requests: Arc::new(AtomicUsize::new(0)),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -36,6 +53,7 @@ pub async fn create_charge(
     headers: HeaderMap,
     Json(req): Json<ChargeRequest>,
 ) -> Response {
+    state.charge_requests.fetch_add(1, Ordering::SeqCst);
     let Some(key) = headers.get("idempotency-key").and_then(|v| v.to_str().ok()) else {
         return (StatusCode::BAD_REQUEST, "Idempotency-Key header required").into_response();
     };

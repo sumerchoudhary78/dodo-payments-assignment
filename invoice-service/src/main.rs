@@ -4,21 +4,8 @@
 //!   invoice-service                        start the HTTP server (default)
 //!   invoice-service create-business NAME   create a business, print its API key once
 
-mod app;
-mod auth;
-mod config;
-mod customers;
-mod domain;
-mod error;
-mod extract;
-mod invoices;
-mod payments;
-mod webhooks;
-mod workers;
-
+use invoice_service::{app, app::AppState, auth, config::Config, payments::psp_client::PspClient, seed, workers};
 use sqlx::postgres::PgPoolOptions;
-
-use crate::{app::AppState, config::Config, payments::psp_client::PspClient};
 
 #[tokio::main]
 async fn main() {
@@ -36,10 +23,7 @@ async fn main() {
         .connect(&config.database_url)
         .await
         .expect("failed to connect to database");
-
-    // Migrations are embedded in the binary at compile time and applied on every start;
-    // sqlx records applied versions in `_sqlx_migrations`, so this is a no-op after the first run.
-    sqlx::migrate!("../migrations").run(&db).await.expect("failed to run migrations");
+    invoice_service::migrate(&db).await.expect("failed to run migrations");
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -58,9 +42,7 @@ async fn main() {
 }
 
 async fn serve(db: sqlx::PgPool, config: Config) {
-    if let Some(key) = &config.seed_api_key {
-        auth::seed_demo_business(&db, key).await.expect("seed demo business");
-    }
+    seed::seed_demo(&db, &config).await.expect("seed demo data");
 
     let psp = PspClient::new(config.psp_url.clone(), config.psp_timeout);
     let state = AppState { db, config, psp };

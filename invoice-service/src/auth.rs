@@ -71,17 +71,3 @@ pub async fn create_business(db: &PgPool, name: &str, key: &str) -> sqlx::Result
     tx.commit().await?;
     Ok(business_id)
 }
-
-/// Creates the demo business for `SEED_API_KEY` unless that key already exists.
-/// Safe to run on every startup.
-pub async fn seed_demo_business(db: &PgPool, key: &str) -> sqlx::Result<()> {
-    let exists: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM api_keys WHERE key_hash = $1)")
-        .bind(hash_key(key))
-        .fetch_one(db)
-        .await?;
-    if !exists {
-        let id = create_business(db, "Demo Business", key).await?;
-        tracing::info!(business_id = %id, "seeded demo business from SEED_API_KEY");
-    }
-    Ok(())
-}
