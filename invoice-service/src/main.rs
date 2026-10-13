@@ -8,8 +8,11 @@ mod app;
 mod auth;
 mod config;
 mod customers;
+mod domain;
 mod error;
 mod extract;
+mod invoices;
+mod webhooks;
 
 use sqlx::postgres::PgPoolOptions;
 

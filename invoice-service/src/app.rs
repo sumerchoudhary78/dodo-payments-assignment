@@ -3,7 +3,7 @@
 use axum::{Router, routing::get};
 use sqlx::PgPool;
 
-use crate::{config::Config, customers, error::ApiError};
+use crate::{config::Config, customers, error::ApiError, invoices};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -15,6 +15,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
         .merge(customers::routes())
+        .merge(invoices::routes())
         .fallback(|| async { ApiError::not_found("route") })
         .with_state(state)
 }
