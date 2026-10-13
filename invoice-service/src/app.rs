@@ -3,7 +3,7 @@
 use axum::{Router, routing::get};
 use sqlx::PgPool;
 
-use crate::{config::Config, customers, error::ApiError, invoices, payments, payments::psp_client::PspClient};
+use crate::{config::Config, customers, error::ApiError, invoices, payments, payments::psp_client::PspClient, webhooks};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,6 +18,7 @@ pub fn router(state: AppState) -> Router {
         .merge(customers::routes())
         .merge(invoices::routes())
         .merge(payments::routes())
+        .merge(webhooks::endpoints::routes())
         .fallback(|| async { ApiError::not_found("route") })
         .with_state(state)
 }

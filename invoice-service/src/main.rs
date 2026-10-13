@@ -67,6 +67,7 @@ async fn serve(db: sqlx::PgPool, config: Config) {
 
     // Background workers run in the same process, independent of any request.
     tokio::spawn(workers::reconciler::run(state.clone()));
+    tokio::spawn(workers::webhook_sender::run(state.clone()));
 
     let listener = tokio::net::TcpListener::bind(&state.config.bind_addr).await.expect("bind");
     tracing::info!(addr = %state.config.bind_addr, "invoice service listening");
