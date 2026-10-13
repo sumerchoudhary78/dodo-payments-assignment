@@ -26,10 +26,10 @@ pub async fn run(state: AppState) {
 async fn tick(state: &AppState) -> sqlx::Result<()> {
     let stale: Vec<Uuid> = sqlx::query_scalar(
         "SELECT id FROM payment_attempts
-         WHERE status = 'pending' AND created_at < now() - make_interval(secs => $1)
+         WHERE status = 'pending' AND created_at < now() - $1 * interval '1 millisecond'
          ORDER BY created_at LIMIT $2",
     )
-    .bind(state.config.reconcile_after.as_secs_f64())
+    .bind(state.config.reconcile_after.as_millis() as i64)
     .bind(BATCH_SIZE)
     .fetch_all(&state.db)
     .await?;

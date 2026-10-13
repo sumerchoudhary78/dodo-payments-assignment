@@ -20,7 +20,7 @@ const TICK: Duration = Duration::from_secs(1);
 const BATCH_SIZE: i64 = 20;
 const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
 /// Must exceed HTTP_TIMEOUT so a delivery isn't re-claimed while still being sent.
-const LEASE_SECS: f64 = 60.0;
+const LEASE_MS: i64 = 60_000;
 pub const MAX_ATTEMPTS: i32 = 8;
 
 /// Delay before the next attempt, given how many attempts have failed so far.
@@ -62,7 +62,7 @@ async fn tick(state: &AppState, http: &reqwest::Client) -> sqlx::Result<()> {
     let due = sqlx::query_as::<_, Due>(
         "WITH claimed AS (
              UPDATE webhook_deliveries
-             SET next_attempt_at = now() + make_interval(secs => $2)
+             SET next_attempt_at = now() + $2 * interval '1 millisecond'
              WHERE id IN (
                  SELECT id FROM webhook_deliveries
                  WHERE status = 'pending' AND next_attempt_at <= now()
@@ -79,7 +79,7 @@ async fn tick(state: &AppState, http: &reqwest::Client) -> sqlx::Result<()> {
          JOIN events e ON e.id = c.event_id",
     )
     .bind(BATCH_SIZE)
-    .bind(LEASE_SECS)
+    .bind(LEASE_MS)
     .fetch_all(&state.db)
     .await?;
 
@@ -139,14 +139,14 @@ async fn deliver(db: &sqlx::PgPool, http: &reqwest::Client, d: Due) -> sqlx::Res
         Some(delay) => {
             sqlx::query(
                 "UPDATE webhook_deliveries SET attempt_count = $2, last_status_code = $3, last_error = $4,
-                     next_attempt_at = now() + make_interval(secs => $5)
+                     next_attempt_at = now() + $5 * interval '1 millisecond'
                  WHERE id = $1",
             )
             .bind(d.id)
             .bind(attempts)
             .bind(status_code)
             .bind(&error)
-            .bind(delay.as_secs_f64())
+            .bind(delay.as_millis() as i64)
             .execute(db)
             .await?;
             tracing::warn!(delivery_id = %d.id, url = %d.url, attempts, retry_in_secs = delay.as_secs(), %error, "webhook failed, will retry");
